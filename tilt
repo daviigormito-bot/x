@@ -75,3 +75,58 @@ for row_num in range(9, 16):
         celula = ws.cell(row=row_num, column=col_num)
         print(f"  C{col_num}: {repr(celula.value)}")
     print()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+from openpyxl import load_workbook
+import sys
+
+arquivo_cliente = r"C:\Users\silva.d.6\OneDrive - Procter and Gamble\Desktop\Antecipações\Cotação_P&G 08.04.2026 - Atualizada.xlsx"
+
+wb = load_workbook(arquivo_cliente, data_only=True)
+ws = wb["Proposta"]
+
+# Escreve tudo num arquivo de texto, assim não tem truncamento
+saida = r"C:\Users\silva.d.6\OneDrive - Procter and Gamble\Desktop\Antecipações\debug_estrutura.txt"
+
+with open(saida, "w", encoding="utf-8") as f:
+    f.write(f"Arquivo: {arquivo_cliente}\n")
+    f.write(f"Aba: Proposta | Total: {ws.max_row} linhas x {ws.max_column} colunas\n")
+    f.write("="*80 + "\n\n")
+    
+    for row_num in range(1, ws.max_row + 1):
+        valores = []
+        for col_num in range(1, ws.max_column + 1):
+            v = ws.cell(row=row_num, column=col_num).value
+            if v is not None and str(v).strip() != "":
+                valores.append(f"C{col_num}={repr(v)}")
+        if valores:
+            f.write(f"L{row_num}: " + " | ".join(valores) + "\n")
+        else:
+            f.write(f"L{row_num}: (vazia)\n")
+
+print(f"✅ Arquivo salvo em: {saida}")
+print("Abra esse arquivo no Bloco de Notas e cole aqui o conteúdo.")
