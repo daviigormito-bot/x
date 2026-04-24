@@ -1,0 +1,31 @@
+from openpyxl import load_workbook
+
+arquivo_cliente = r"C:\Users\silva.d.6\OneDrive - Procter and Gamble\Desktop\Antecipações\Cotação_P&G 08.04.2026 - Atualizada.xlsx"
+
+wb = load_workbook(arquivo_cliente, data_only=True)
+
+print("=" * 80)
+print("ABAS:", wb.sheetnames)
+print("=" * 80)
+
+ws = wb[wb.sheetnames[0]]
+print(f"Dimensões: {ws.dimensions}")
+print(f"Total de linhas: {ws.max_row} | Total de colunas: {ws.max_column}")
+print(f"Células mescladas: {list(ws.merged_cells.ranges)}")
+print("=" * 80)
+
+# Imprime as primeiras 20 linhas, célula por célula
+print("\nCONTEÚDO (linhas 1 a 20):\n")
+for row_num in range(1, min(21, ws.max_row + 1)):
+    linha_preenchida = []
+    for col_num in range(1, ws.max_column + 1):
+        celula = ws.cell(row=row_num, column=col_num)
+        if celula.value is not None:
+            linha_preenchida.append(f"[L{row_num},C{col_num}]={repr(celula.value)}")
+    if linha_preenchida:
+        print(f"Linha {row_num}:")
+        for item in linha_preenchida:
+            print(f"    {item}")
+        print()
+    else:
+        print(f"Linha {row_num}: (vazia)\n")
