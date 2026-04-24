@@ -24,3 +24,34 @@ comum = set(df_meu["chave"]) & set(df_cli["chave"])
 print(f"Chaves em comum: {len(comum)}")
 if comum:
     print(f"Exemplos: {list(comum)[:5]}")
+
+
+
+
+
+
+
+
+
+
+df_meu_raw = carregar_minha_base(arquivo_minha_base)
+
+# Acha a coluna Fiscal Note
+col_chave = achar_coluna(df_meu_raw.columns, ["fiscal note", "fiscal_note", "nota fiscal"])
+print(f"Coluna da chave: {repr(col_chave)}\n")
+
+# Mostra as 20 primeiras chaves BRUTAS (sem limpeza nenhuma)
+print("PRIMEIROS 20 VALORES BRUTOS de Fiscal Note:")
+for v in df_meu_raw[col_chave].head(20).tolist():
+    print(f"  {repr(v)}")
+
+# Procura especificamente as chaves que o cliente tem
+print("\n\nPROCURA NAS MINHAS as chaves do cliente (1940786, 1940785, etc.):")
+chaves_cliente = ["1940786", "1940785", "1940783", "1940781", "1940779"]
+for ck in chaves_cliente:
+    # procura qualquer linha que contenha esse número
+    achados = df_meu_raw[df_meu_raw[col_chave].astype(str).str.contains(ck, na=False)]
+    if len(achados):
+        print(f"  {ck}: encontrei {len(achados)} linha(s), valor bruto = {repr(achados[col_chave].iloc[0])}")
+    else:
+        print(f"  {ck}: NÃO encontrado na minha base")
