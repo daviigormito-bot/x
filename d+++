@@ -58,27 +58,33 @@ def carregar_arquivo(caminho, header_row=0, sheet_name=0):
 
 def carregar_cliente(caminho):
     """
-    Leitura especial da planilha do cliente.
-    Os cabeçalhos estão na linha 10 (começando na coluna 1, não 0).
-    A linha 11 é um totalizador ('Selecionar') que deve ser descartado.
+    Lê a planilha do cliente. Estrutura conhecida:
+    - Aba única 'Proposta'
+    - Linhas 0-9: resumo da proposta (descartar)
+    - Linha 10: cabeçalhos (Fornecedor, CNPJ, Numero do Título, etc.)
+    - Linha 11: totalizador "Selecionar" (descartar)
+    - Linha 12+: dados reais
     """
-    # Lê SEM cabeçalho, pegando tudo como texto
-    bruto = pd.read_excel(caminho, sheet_name="Proposta", header=None, dtype=str, engine="openpyxl")
+    bruto = pd.read_excel(caminho, sheet_name="Proposta", header=None,
+                          dtype=str, engine="openpyxl")
 
-    # A linha 10 contém os cabeçalhos. Pega os valores dessa linha como nomes de coluna.
-    cabecalhos = bruto.iloc[10].tolist()
-    # Dados começam na linha 12 (linha 11 é o totalizador "Selecionar" — ignoramos)
+    # Pega a linha 10 como cabeçalhos, tratando NaN como string vazia
+    cabecalhos = []
+    for i, v in enumerate(bruto.iloc[10].tolist()):
+        if pd.isna(v) or str(v).strip() == "":
+            cabecalhos.append(f"_col_{i}")   # placeholder para colunas sem nome
+        else:
+            cabecalhos.append(str(v).strip())
+
+    # Dados reais começam a partir da linha 12 (linha 11 é totalizador)
     dados = bruto.iloc[12:].copy()
     dados.columns = cabecalhos
 
-    # Remove colunas sem nome (NaN/vazio no cabeçalho)
-    dados = dados.loc[:, dados.columns.notna()]
-    dados = dados.loc[:, [str(c).strip() != "" for c in dados.columns]]
-
-    # Remove linhas totalmente vazias
+    # Remove linhas completamente vazias
     dados = dados.dropna(how="all").reset_index(drop=True)
 
-    print(f"  ℹ Cliente lido: {len(dados)} linhas, colunas: {list(dados.columns)}")
+    print(f"  ℹ Cliente lido: {len(dados)} linhas")
+    print(f"     Colunas: {list(dados.columns)}")
     return dados
 
 
