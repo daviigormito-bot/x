@@ -58,43 +58,52 @@ def carregar_arquivo(caminho, header_row=0, sheet_name=0):
 
 def carregar_cliente(caminho):
     """
-    Lê a planilha do cliente.
-    Estrutura conhecida (descoberta via diagnóstico):
+    Lê a planilha do cliente usando coordenadas fixas descobertas via diagnóstico.
+    Estrutura:
     - Aba: 'Proposta'
-    - Linha 12: cabeçalhos (colunas C2 a C11)
-    - Linha 13: totalizador 'Selecionar' (ignorar)
-    - Linhas 14 a 37: dados reais
+    - Linha 12: cabeçalhos (C2-C11)
+    - Linha 13: totalizador (descartar)
+    - Linhas 14-37: dados reais
     """
     from openpyxl import load_workbook
     
     wb = load_workbook(caminho, data_only=True)
     ws = wb["Proposta"]
     
-    # Cabeçalhos estão na linha 12 (Excel) = índice 12 no openpyxl
-    cabecalhos = {}
-    for col in range(2, 12):  # C2 a C11
+    # Lê cabeçalhos da linha 12, colunas 2 a 11
+    cabecalhos = []
+    for col in range(2, 12):
         valor = ws.cell(row=12, column=col).value
-        if valor:
-            cabecalhos[col] = str(valor).strip()
+        cabecalhos.append(str(valor).strip() if valor else f"_col_{col}")
     
-    # Monta os dados a partir da linha 14 (linha 13 é o totalizador)
+    print(f"  ℹ Cabeçalhos lidos: {cabecalhos}")
+    
+    # Lê dados da linha 14 em diante
     linhas = []
     for row_num in range(14, ws.max_row + 1):
-        linha = {}
-        for col, nome in cabecalhos.items():
-            linha[nome] = ws.cell(row=row_num, column=col).value
-        # Só adiciona se a linha tem dados (pelo menos o número do título)
-        if linha.get("Numero do Título"):
-            linhas.append(linha)
+        valores = []
+        for col in range(2, 12):
+            valores.append(ws.cell(row=row_num, column=col).value)
+        
+        # Critério para considerar linha válida: coluna 5 (Numero do Título) preenchida
+        # E coluna 2 (Fornecedor) preenchida também
+        if valores[0] is not None and valores[3] is not None:  # C2 e C5
+            linhas.append(valores)
     
-    df = pd.DataFrame(linhas)
-    # Converte tudo para string para padronizar com o resto do pipeline
+    if not linhas:
+        raise ValueError("Nenhuma linha de dados encontrada entre as linhas 14 e 37 do arquivo do cliente!")
+    
+    df = pd.DataFrame(linhas, columns=cabecalhos)
     df = df.astype(str)
     
     print(f"  ℹ Cliente lido: {len(df)} linhas")
-    print(f"     Colunas: {list(df.columns)}")
+    print(f"     Colunas finais: {list(df.columns)}")
+    
+    # DEBUG: mostra as primeiras 2 linhas para confirmação
+    print(f"\n  🔍 Primeiras 2 linhas de dados:")
+    print(df.head(2).to_string())
+    
     return df
-
 
 # =============================================================================
 # LIMPEZA
