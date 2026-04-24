@@ -1,0 +1,26 @@
+# DIAGNÓSTICO: compara as chaves das duas bases
+df_meu_raw = carregar_minha_base(arquivo_minha_base)
+df_cli_raw = carregar_cliente(arquivo_cliente)
+
+df_meu = preparar_minha(df_meu_raw)
+df_cli = preparar_cliente(df_cli_raw)
+
+print("=" * 70)
+print("CHAVES DA MINHA BASE (primeiras 20):")
+print("=" * 70)
+for c in df_meu["chave"].head(20).tolist():
+    print(f"  {repr(c)}")
+
+print("\n" + "=" * 70)
+print("CHAVES DO CLIENTE (todas):")
+print("=" * 70)
+for c in df_cli["chave"].tolist():
+    print(f"  {repr(c)}")
+
+print("\n" + "=" * 70)
+print("INTERSECÇÃO:")
+print("=" * 70)
+comum = set(df_meu["chave"]) & set(df_cli["chave"])
+print(f"Chaves em comum: {len(comum)}")
+if comum:
+    print(f"Exemplos: {list(comum)[:5]}")
