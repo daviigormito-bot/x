@@ -192,3 +192,20 @@ def main():
 
 
 main()
+import pandas as pd
+
+arquivo_cliente = r"C:\Users\silva.d.6\OneDrive - Procter and Gamble\Desktop\Antecipações\Cotação_P&G 08.04.2026 - Atualizada.xlsx"
+
+# 1) Listar todas as abas
+xl = pd.ExcelFile(arquivo_cliente)
+print("ABAS DISPONÍVEIS:", xl.sheet_names)
+print()
+
+# 2) Mostrar as 30 primeiras linhas de CADA aba
+for aba in xl.sheet_names:
+    print(f"{'='*70}")
+    print(f"ABA: {aba}")
+    print('='*70)
+    preview = pd.read_excel(arquivo_cliente, sheet_name=aba, header=None, dtype=str, nrows=30)
+    print(preview.to_string())
+    print()
