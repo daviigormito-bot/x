@@ -29,3 +29,49 @@ for row_num in range(1, min(21, ws.max_row + 1)):
         print()
     else:
         print(f"Linha {row_num}: (vazia)\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+from openpyxl import load_workbook
+
+arquivo_cliente = r"C:\Users\silva.d.6\OneDrive - Procter and Gamble\Desktop\Antecipações\Cotação_P&G 08.04.2026 - Atualizada.xlsx"
+
+wb = load_workbook(arquivo_cliente, data_only=True)
+ws = wb["Proposta"]
+
+# Mostra SOMENTE as linhas 9 a 15 (onde deve estar o cabeçalho e primeiros dados)
+print("LINHAS 9 a 15 (foco no cabeçalho):\n")
+for row_num in range(9, 16):
+    print(f"--- Linha {row_num} ---")
+    for col_num in range(1, 12):  # 11 colunas
+        celula = ws.cell(row=row_num, column=col_num)
+        print(f"  C{col_num}: {repr(celula.value)}")
+    print()
