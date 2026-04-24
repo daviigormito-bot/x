@@ -1,0 +1,194 @@
+import pandas as pd
+from pathlib import Path
+
+# =============================================================================
+# CONFIGURAÇÃO
+# =============================================================================
+arquivo_minha_base = r"C:\Users\silva.d.6\OneDrive - Procter and Gamble\Desktop\Antecipações\MAGAZINE DOWN20260408060103.XLSX"
+arquivo_cliente    = r"C:\Users\silva.d.6\OneDrive - Procter and Gamble\Desktop\Antecipações\Cotação_P&G 08.04.2026 - Atualizada.xlsx"
+arquivo_saida      = r"C:\Users\silva.d.6\OneDrive - Procter and Gamble\Desktop\Antecipações\relatorio_auditoria.xlsx"
+
+TOLERANCIA_VALOR = 0.01
+
+col_minha = {
+    "chave": "Fiscal Note",
+    "data":  "Expire date",
+    "valor": "Gross Amount",
+}
+col_cliente = {
+    "chave": "Número do Título",
+    "data":  "Vencimento Ajustado",
+    "valor": "Saldo do Título",
+}
+
+# =============================================================================
+# CARREGAMENTO COM DETECÇÃO AUTOMÁTICA
+# =============================================================================
+def _ler_como_texto(caminho):
+    """Tenta ler como CSV/TSV com vários encodings."""
+    for enc in ("utf-8", "utf-16", "latin-1", "cp1252"):
+        try:
+            df = pd.read_csv(caminho, dtype=str, sep=None, engine="python", encoding=enc)
+            if df.shape[1] >= 2:
+                print(f"  ℹ Lido como texto (encoding={enc})")
+                return df
+        except Exception:
+            continue
+    raise ValueError(f"Não foi possível ler: {caminho}")
+
+
+def carregar_arquivo(caminho):
+    """Detecta automaticamente se é xlsx, xls ou CSV disfarçado."""
+    # 1) Identifica o formato REAL pelos primeiros bytes (não confia na extensão)
+    with open(caminho, "rb") as f:
+        assinatura = f.read(8)
+
+    if assinatura[:4] == b"PK\x03\x04":
+        # É XLSX de verdade
+        print("  ℹ Detectado: XLSX")
+        return pd.read_excel(caminho, dtype=str, engine="openpyxl")
+
+    if assinatura[:4] == b"\xd0\xcf\x11\xe0":
+        # É XLS antigo (OLE2) → precisa xlrd==1.2.0
+        print("  ℹ Detectado: XLS antigo")
+        return pd.read_excel(caminho, dtype=str, engine="xlrd")
+
+    # Caso contrário, é texto (CSV/TSV disfarçado)
+    print("  ℹ Detectado: texto (CSV/TSV)")
+    return _ler_como_texto(caminho)
+
+
+# =============================================================================
+# LIMPEZA
+# =============================================================================
+def limpar_chave(serie):
+    s = serie.astype(str).str.strip()
+    s = s.str.replace(r"\.0$", "", regex=True)
+    s = s.str.replace(r"\s+", "", regex=True)
+    s = s.str.upper()
+    return s
+
+
+def limpar_valor(serie):
+    s = serie.astype(str).str.strip()
+    s = s.str.replace("R$", "", regex=False)
+    s = s.str.replace(" ", "", regex=False)
+    s = s.str.replace("\xa0", "", regex=False)
+
+    def _conv(x):
+        if x in ("", "nan", "None", "-"):
+            return 0.0
+        if "," in x:
+            x = x.replace(".", "").replace(",", ".")
+        try:
+            return float(x)
+        except ValueError:
+            return 0.0
+
+    return s.apply(_conv)
+
+
+def limpar_data(serie):
+    return pd.to_datetime(serie, dayfirst=True, errors="coerce").dt.normalize()
+
+
+# =============================================================================
+# PIPELINE
+# =============================================================================
+def preparar_df(df, cols, origem):
+    df.columns = [str(c).strip() for c in df.columns]
+
+    faltando = [c for c in cols.values() if c not in df.columns]
+    if faltando:
+        raise KeyError(
+            f"Colunas não encontradas ({origem}): {faltando}\n"
+            f"Disponíveis: {list(df.columns)}"
+        )
+
+    out = pd.DataFrame({
+        "chave": limpar_chave(df[cols["chave"]]),
+        f"data_{origem}":  limpar_data(df[cols["data"]]),
+        f"valor_{origem}": limpar_valor(df[cols["valor"]]),
+    })
+
+    out = out[out["chave"].str.len() > 0].copy()
+
+    if out["chave"].duplicated().any():
+        print(f"  ⚠ {out['chave'].duplicated().sum()} duplicadas em {origem} — agregando.")
+        out = out.groupby("chave", as_index=False).agg({
+            f"data_{origem}":  "min",
+            f"valor_{origem}": "sum",
+        })
+
+    return out
+
+
+def auditar(df_cli, df_meu):
+    df = df_cli.merge(df_meu, on="chave", how="outer", indicator=True)
+
+    apenas_cliente = df[df["_merge"] == "left_only"].drop(columns="_merge")
+    apenas_minha   = df[df["_merge"] == "right_only"].drop(columns="_merge")
+
+    ambos = df[df["_merge"] == "both"].drop(columns="_merge").copy()
+    ambos["diff_data"]  = ambos["data_cliente"] != ambos["data_minha"]
+    ambos["diff_valor"] = (ambos["valor_cliente"] - ambos["valor_minha"]).abs() > TOLERANCIA_VALOR
+    ambos["diferenca_valor"] = (ambos["valor_cliente"] - ambos["valor_minha"]).round(2)
+
+    so_data     = ambos[ ambos["diff_data"] & ~ambos["diff_valor"]]
+    so_valor    = ambos[~ambos["diff_data"] &  ambos["diff_valor"]]
+    data_valor  = ambos[ ambos["diff_data"] &  ambos["diff_valor"]]
+    conciliadas = ambos[~ambos["diff_data"] & ~ambos["diff_valor"]]
+
+    cols_comp = ["chave", "data_cliente", "data_minha",
+                 "valor_cliente", "valor_minha", "diferenca_valor"]
+
+    return {
+        "1. Apenas Cliente":       apenas_cliente[["chave", "data_cliente", "valor_cliente"]],
+        "2. Apenas Minha Base":    apenas_minha[["chave", "data_minha", "valor_minha"]],
+        "3. Divergencia Data":     so_data[cols_comp],
+        "4. Divergencia Valor":    so_valor[cols_comp],
+        "5. Divergencia Data+Val": data_valor[cols_comp],
+        "6. Conciliadas":          conciliadas[cols_comp],
+    }
+
+
+def exportar_excel(abas, caminho):
+    with pd.ExcelWriter(caminho, engine="openpyxl") as writer:
+        for nome, df in abas.items():
+            df.to_excel(writer, sheet_name=nome[:31], index=False)
+            ws = writer.sheets[nome[:31]]
+            for col_idx, col in enumerate(df.columns, start=1):
+                largura = max(len(str(col)),
+                              df[col].astype(str).str.len().max() if len(df) else 0)
+                ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = min(largura + 2, 40)
+
+
+# =============================================================================
+# EXECUÇÃO
+# =============================================================================
+def main():
+    print("📂 Carregando MINHA BASE...")
+    df_meu_raw = carregar_arquivo(arquivo_minha_base)
+    print(f"   → {len(df_meu_raw)} linhas | colunas: {list(df_meu_raw.columns)[:5]}")
+
+    print("\n📂 Carregando BASE DO CLIENTE...")
+    df_cli_raw = carregar_arquivo(arquivo_cliente)
+    print(f"   → {len(df_cli_raw)} linhas | colunas: {list(df_cli_raw.columns)[:5]}")
+
+    print("\n🧹 Limpando...")
+    df_meu = preparar_df(df_meu_raw, col_minha,   "minha")
+    df_cli = preparar_df(df_cli_raw, col_cliente, "cliente")
+
+    print("\n🔎 Auditando...")
+    abas = auditar(df_cli, df_meu)
+
+    print("\n📊 Resumo:")
+    for nome, df in abas.items():
+        print(f"   {nome:30s} → {len(df):>6} notas")
+
+    print(f"\n💾 Gerando {arquivo_saida}...")
+    exportar_excel(abas, arquivo_saida)
+    print("✅ Concluído!")
+
+
+main()
