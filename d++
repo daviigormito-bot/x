@@ -196,3 +196,25 @@ def main():
 
 
 main()
+
+
+
+
+
+
+
+
+
+
+
+import pandas as pd
+
+arquivo_cliente = r"C:\Users\silva.d.6\OneDrive - Procter and Gamble\Desktop\Antecipações\Cotação_P&G 08.04.2026 - Atualizada.xlsx"
+
+# Lê sem header, mostra as linhas 8 a 14 inteiras
+preview = pd.read_excel(arquivo_cliente, sheet_name="Proposta", header=None, dtype=str, nrows=15)
+
+for i, row in preview.iterrows():
+    # Mostra apenas células não-vazias de cada linha com seu índice de coluna
+    valores_preenchidos = [(j, v) for j, v in enumerate(row) if pd.notna(v)]
+    print(f"Linha {i}: {valores_preenchidos}")
