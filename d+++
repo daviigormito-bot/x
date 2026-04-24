@@ -58,33 +58,53 @@ def carregar_arquivo(caminho, header_row=0, sheet_name=0):
 
 def carregar_cliente(caminho):
     """
-    Lê a planilha do cliente. Estrutura conhecida:
-    - Aba única 'Proposta'
-    - Linhas 0-9: resumo da proposta (descartar)
-    - Linha 10: cabeçalhos (Fornecedor, CNPJ, Numero do Título, etc.)
-    - Linha 11: totalizador "Selecionar" (descartar)
-    - Linha 12+: dados reais
+    Lê a planilha do cliente procurando automaticamente a linha de cabeçalhos.
+    A linha de cabeçalho é identificada por conter 'Fornecedor' ou 'Número do Título'.
     """
     bruto = pd.read_excel(caminho, sheet_name="Proposta", header=None,
                           dtype=str, engine="openpyxl")
 
-    # Pega a linha 10 como cabeçalhos, tratando NaN como string vazia
+    # Marcadores que identificam a linha de cabeçalho
+    marcadores = ["fornecedor", "numero do título", "número do título",
+                  "saldo do título", "vencimento ajustado"]
+
+    linha_cabecalho = None
+    for idx, linha in bruto.iterrows():
+        valores = [str(v).lower().strip() for v in linha.tolist() if pd.notna(v)]
+        # Se alguma célula dessa linha contém um dos marcadores, achamos!
+        if any(m in " | ".join(valores) for m in marcadores):
+            linha_cabecalho = idx
+            break
+
+    if linha_cabecalho is None:
+        raise ValueError(
+            "Não consegui encontrar a linha de cabeçalhos na planilha do cliente.\n"
+            "Verifique se existe uma linha com 'Fornecedor' ou 'Número do Título'."
+        )
+
+    print(f"  ℹ Cabeçalho encontrado na linha {linha_cabecalho}")
+
+    # Monta os cabeçalhos com placeholder para colunas sem nome
     cabecalhos = []
-    for i, v in enumerate(bruto.iloc[10].tolist()):
+    for i, v in enumerate(bruto.iloc[linha_cabecalho].tolist()):
         if pd.isna(v) or str(v).strip() == "":
-            cabecalhos.append(f"_col_{i}")   # placeholder para colunas sem nome
+            cabecalhos.append(f"_col_{i}")
         else:
             cabecalhos.append(str(v).strip())
 
-    # Dados reais começam a partir da linha 12 (linha 11 é totalizador)
-    dados = bruto.iloc[12:].copy()
+    # Dados começam 2 linhas depois do cabeçalho (pula totalizador)
+    dados = bruto.iloc[linha_cabecalho + 2:].copy()
     dados.columns = cabecalhos
 
     # Remove linhas completamente vazias
     dados = dados.dropna(how="all").reset_index(drop=True)
 
     print(f"  ℹ Cliente lido: {len(dados)} linhas")
-    print(f"     Colunas: {list(dados.columns)}")
+    print(f"     Colunas reais encontradas:")
+    for c in dados.columns:
+        if not c.startswith("_col_"):
+            print(f"        → {repr(c)}")
+
     return dados
 
 
