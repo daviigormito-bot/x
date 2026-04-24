@@ -58,54 +58,42 @@ def carregar_arquivo(caminho, header_row=0, sheet_name=0):
 
 def carregar_cliente(caminho):
     """
-    Lê a planilha do cliente procurando automaticamente a linha de cabeçalhos.
-    A linha de cabeçalho é identificada por conter 'Fornecedor' ou 'Número do Título'.
+    Lê a planilha do cliente.
+    Estrutura conhecida (descoberta via diagnóstico):
+    - Aba: 'Proposta'
+    - Linha 12: cabeçalhos (colunas C2 a C11)
+    - Linha 13: totalizador 'Selecionar' (ignorar)
+    - Linhas 14 a 37: dados reais
     """
-    bruto = pd.read_excel(caminho, sheet_name="Proposta", header=None,
-                          dtype=str, engine="openpyxl")
-
-    # Marcadores que identificam a linha de cabeçalho
-    marcadores = ["fornecedor", "numero do título", "número do título",
-                  "saldo do título", "vencimento ajustado"]
-
-    linha_cabecalho = None
-    for idx, linha in bruto.iterrows():
-        valores = [str(v).lower().strip() for v in linha.tolist() if pd.notna(v)]
-        # Se alguma célula dessa linha contém um dos marcadores, achamos!
-        if any(m in " | ".join(valores) for m in marcadores):
-            linha_cabecalho = idx
-            break
-
-    if linha_cabecalho is None:
-        raise ValueError(
-            "Não consegui encontrar a linha de cabeçalhos na planilha do cliente.\n"
-            "Verifique se existe uma linha com 'Fornecedor' ou 'Número do Título'."
-        )
-
-    print(f"  ℹ Cabeçalho encontrado na linha {linha_cabecalho}")
-
-    # Monta os cabeçalhos com placeholder para colunas sem nome
-    cabecalhos = []
-    for i, v in enumerate(bruto.iloc[linha_cabecalho].tolist()):
-        if pd.isna(v) or str(v).strip() == "":
-            cabecalhos.append(f"_col_{i}")
-        else:
-            cabecalhos.append(str(v).strip())
-
-    # Dados começam 2 linhas depois do cabeçalho (pula totalizador)
-    dados = bruto.iloc[linha_cabecalho + 2:].copy()
-    dados.columns = cabecalhos
-
-    # Remove linhas completamente vazias
-    dados = dados.dropna(how="all").reset_index(drop=True)
-
-    print(f"  ℹ Cliente lido: {len(dados)} linhas")
-    print(f"     Colunas reais encontradas:")
-    for c in dados.columns:
-        if not c.startswith("_col_"):
-            print(f"        → {repr(c)}")
-
-    return dados
+    from openpyxl import load_workbook
+    
+    wb = load_workbook(caminho, data_only=True)
+    ws = wb["Proposta"]
+    
+    # Cabeçalhos estão na linha 12 (Excel) = índice 12 no openpyxl
+    cabecalhos = {}
+    for col in range(2, 12):  # C2 a C11
+        valor = ws.cell(row=12, column=col).value
+        if valor:
+            cabecalhos[col] = str(valor).strip()
+    
+    # Monta os dados a partir da linha 14 (linha 13 é o totalizador)
+    linhas = []
+    for row_num in range(14, ws.max_row + 1):
+        linha = {}
+        for col, nome in cabecalhos.items():
+            linha[nome] = ws.cell(row=row_num, column=col).value
+        # Só adiciona se a linha tem dados (pelo menos o número do título)
+        if linha.get("Numero do Título"):
+            linhas.append(linha)
+    
+    df = pd.DataFrame(linhas)
+    # Converte tudo para string para padronizar com o resto do pipeline
+    df = df.astype(str)
+    
+    print(f"  ℹ Cliente lido: {len(df)} linhas")
+    print(f"     Colunas: {list(df.columns)}")
+    return df
 
 
 # =============================================================================
